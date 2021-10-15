@@ -1,0 +1,93 @@
+// Copyright 2014 Autodesk, Inc.  All rights reserved.
+//
+// Use of this software is subject to the terms of the Autodesk license agreement
+// provided at the time of installation or download, or which otherwise
+// accompanies this software in either electronic or hard copy form.
+//
+// Simple shader to output some vertex attributes to different output targets
+// For now will write out 2 outputs: position and normals in world space.
+//
+
+#include "Common.ogsfh"
+
+// Vertex input structure
+attribute VS_INPUT
+{
+    vec3 Pm : POSITION;
+    vec3 Cd : COLOR0;
+}
+
+// Vertex output structure
+attribute VS_TO_PS
+{
+    vec3 Colorw : TEXCOORD1;
+}
+
+uniform vec3 MyColor = {0.8, 0.2, 0.2};
+
+
+// Globals
+uniform mat4 WorldIT : worldinversetranspose;
+uniform mat4 World : world;
+uniform float DepthPriority : depthpriority;
+uniform mat4 WorldViewProj : worldviewprojection;
+
+
+//  Vertex shader fragments
+
+GLSLShader VS_GeometryAttributes
+{
+    vec4 iPcPriority( vec3 pm, float depthPriority, mat4 worldViewProjectionC )
+    {
+        vec4 P = worldViewProjectionC * vec4(pm,1);
+        P.z -= P.w * 2.0 * depthPriority;
+        return P;
+    }
+
+    void main()
+    {
+        Colorw = Cd;
+        gl_Position= iPcPriority ( Pm, DepthPriority, WorldViewProj );
+    }
+}
+
+
+// Pixel shader output structure.
+attribute PS_OUT
+{
+    vec4 colorOut[2];
+}
+
+// Pixel shader.
+GLSLShader PS_GeometryAttributes
+{
+    float near = 0.001; 
+    float far  = 10.0; 
+    float LinearizeDepth(float depth) 
+    {
+        float z = depth * 2.0 - 1.0; // back to NDC 
+        return (2.0 * near * far) / (far + near - z * (far - near));    
+    }
+
+    void main()
+    {
+        //colorOut[0] = vec4( vec3(LinearizeDepth(gl_FragCoord.z)),  1.0);
+        colorOut[0] = vec4( LinearizeDepth(gl_FragCoord.z), LinearizeDepth(gl_FragCoord.z), LinearizeDepth(gl_FragCoord.z), 1.0);
+        colorOut[1] = vec4(Colorw, 1.0);
+    }
+}
+
+// Technique.
+technique Main
+{
+    pass p0
+    {
+        VertexShader (in VS_INPUT, out VS_TO_PS) = VS_GeometryAttributes;
+        PixelShader (in VS_TO_PS, out PS_OUT) = PS_GeometryAttributes;
+    }
+    pass p1
+    {
+        VertexShader (in VS_INPUT, out VS_TO_PS) = VS_GeometryAttributes;
+        PixelShader (in VS_TO_PS, out PS_OUT) = PS_GeometryAttributes;
+    }
+}
